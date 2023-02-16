@@ -1,0 +1,12 @@
+22ad861214138aeeacaf22eb2401022d *DESCRIPTION
+89a6c9e2daadddb617caa1e70e7fab1b *NAMESPACE
+b176456bc23dfdcbe6af4923f90dcb03 *R/RcppExports.R
+d4398b346f91c78b15ddbd84bdbb2574 *R/cv.pemultinom.R
+07b6c959ce9738eb6d01323b2a4eb296 *R/debiased_lasso.R
+ee64e9f2af904e63a5d7ef10d513d203 *R/funcs.R
+68cadfef65e76820402d6b87e8f04c08 *R/predict_pemultinom.R
+c1b653853470418ea542e8faa9c7dce3 *man/cv.pemultinom.Rd
+99da22040975aaecf4276416f658a169 *man/debiased_lasso.Rd
+78a413deb5d0e0dce84fe07993ddc1e2 *man/predict_pemultinom.Rd
+f1105006bc6586148804b701d992f8d3 *src/RcppExports.cpp
+9eff984df4aa4b93d5539ce75c9dd163 *src/test_cpp.cpp
