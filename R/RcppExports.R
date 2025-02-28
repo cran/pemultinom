@@ -25,8 +25,8 @@ vec_sum <- function(x) {
     .Call('_pemultinom_vec_sum', PACKAGE = 'pemultinom', x)
 }
 
-max2 <- function(x, y) {
-    .Call('_pemultinom_max2', PACKAGE = 'pemultinom', x, y)
+max2 <- function(a, b) {
+    .Call('_pemultinom_max2', PACKAGE = 'pemultinom', a, b)
 }
 
 vec_max <- function(x) {
@@ -69,8 +69,8 @@ test <- function(x) {
     .Call('_pemultinom_test', PACKAGE = 'pemultinom', x)
 }
 
-soft_thresholding <- function(z, gamma) {
-    .Call('_pemultinom_soft_thresholding', PACKAGE = 'pemultinom', z, gamma)
+soft_thresholding <- function(z, lambda) {
+    .Call('_pemultinom_soft_thresholding', PACKAGE = 'pemultinom', z, lambda)
 }
 
 pemultinom_c <- function(x, y, lambda_list, max_iter, tol) {
@@ -81,7 +81,7 @@ penalized_quad <- function(A, b, lambda_list, max_iter, tol) {
     .Call('_pemultinom_penalized_quad', PACKAGE = 'pemultinom', A, b, lambda_list, max_iter, tol)
 }
 
-pemultinom_c_reverse <- function(x, y, lambda_list, max_iter, tol, zero_ind, weights) {
-    .Call('_pemultinom_pemultinom_c_reverse', PACKAGE = 'pemultinom', x, y, lambda_list, max_iter, tol, zero_ind, weights)
+pemultinom_c_reverse <- function(x, y, lambda_list, max_iter, tol, zero_ind, weights, intercept) {
+    .Call('_pemultinom_pemultinom_c_reverse', PACKAGE = 'pemultinom', x, y, lambda_list, max_iter, tol, zero_ind, weights, intercept)
 }
 

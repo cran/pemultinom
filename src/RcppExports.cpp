@@ -11,25 +11,25 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // vec_prod
-double vec_prod(NumericVector x, NumericVector y);
+double vec_prod(const NumericVector& x, const NumericVector& y);
 RcppExport SEXP _pemultinom_vec_prod(SEXP xSEXP, SEXP ySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type y(ySEXP);
     rcpp_result_gen = Rcpp::wrap(vec_prod(x, y));
     return rcpp_result_gen;
 END_RCPP
 }
 // vec_diff
-NumericVector vec_diff(NumericVector x, NumericVector y);
+NumericVector vec_diff(const NumericVector& x, const NumericVector& y);
 RcppExport SEXP _pemultinom_vec_diff(SEXP xSEXP, SEXP ySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type y(ySEXP);
     rcpp_result_gen = Rcpp::wrap(vec_diff(x, y));
     return rcpp_result_gen;
 END_RCPP
@@ -72,25 +72,25 @@ BEGIN_RCPP
 END_RCPP
 }
 // vec_sum
-double vec_sum(NumericVector x);
+double vec_sum(const NumericVector& x);
 RcppExport SEXP _pemultinom_vec_sum(SEXP xSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type x(xSEXP);
     rcpp_result_gen = Rcpp::wrap(vec_sum(x));
     return rcpp_result_gen;
 END_RCPP
 }
 // max2
-double max2(double x, double y);
-RcppExport SEXP _pemultinom_max2(SEXP xSEXP, SEXP ySEXP) {
+double max2(double a, double b);
+RcppExport SEXP _pemultinom_max2(SEXP aSEXP, SEXP bSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type x(xSEXP);
-    Rcpp::traits::input_parameter< double >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(max2(x, y));
+    Rcpp::traits::input_parameter< double >::type a(aSEXP);
+    Rcpp::traits::input_parameter< double >::type b(bSEXP);
+    rcpp_result_gen = Rcpp::wrap(max2(a, b));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -153,12 +153,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // pr
-NumericMatrix pr(NumericMatrix xb);
+NumericMatrix pr(const NumericMatrix& xb);
 RcppExport SEXP _pemultinom_pr(SEXP xbSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type xb(xbSEXP);
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type xb(xbSEXP);
     rcpp_result_gen = Rcpp::wrap(pr(xb));
     return rcpp_result_gen;
 END_RCPP
@@ -188,12 +188,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // vec_max_norm
-double vec_max_norm(NumericVector x);
+double vec_max_norm(const NumericVector& x);
 RcppExport SEXP _pemultinom_vec_max_norm(SEXP xSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type x(xSEXP);
     rcpp_result_gen = Rcpp::wrap(vec_max_norm(x));
     return rcpp_result_gen;
 END_RCPP
@@ -210,14 +210,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // soft_thresholding
-double soft_thresholding(double z, double gamma);
-RcppExport SEXP _pemultinom_soft_thresholding(SEXP zSEXP, SEXP gammaSEXP) {
+double soft_thresholding(double z, double lambda);
+RcppExport SEXP _pemultinom_soft_thresholding(SEXP zSEXP, SEXP lambdaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type z(zSEXP);
-    Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(soft_thresholding(z, gamma));
+    Rcpp::traits::input_parameter< double >::type lambda(lambdaSEXP);
+    rcpp_result_gen = Rcpp::wrap(soft_thresholding(z, lambda));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -252,8 +252,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // pemultinom_c_reverse
-List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda_list, int max_iter, double tol, NumericVector zero_ind, NumericVector weights);
-RcppExport SEXP _pemultinom_pemultinom_c_reverse(SEXP xSEXP, SEXP ySEXP, SEXP lambda_listSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP zero_indSEXP, SEXP weightsSEXP) {
+List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda_list, int max_iter, double tol, NumericVector zero_ind, NumericVector weights, bool intercept);
+RcppExport SEXP _pemultinom_pemultinom_c_reverse(SEXP xSEXP, SEXP ySEXP, SEXP lambda_listSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP zero_indSEXP, SEXP weightsSEXP, SEXP interceptSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -264,7 +264,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type zero_ind(zero_indSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type weights(weightsSEXP);
-    rcpp_result_gen = Rcpp::wrap(pemultinom_c_reverse(x, y, lambda_list, max_iter, tol, zero_ind, weights));
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    rcpp_result_gen = Rcpp::wrap(pemultinom_c_reverse(x, y, lambda_list, max_iter, tol, zero_ind, weights, intercept));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -290,7 +291,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_pemultinom_soft_thresholding", (DL_FUNC) &_pemultinom_soft_thresholding, 2},
     {"_pemultinom_pemultinom_c", (DL_FUNC) &_pemultinom_pemultinom_c, 5},
     {"_pemultinom_penalized_quad", (DL_FUNC) &_pemultinom_penalized_quad, 5},
-    {"_pemultinom_pemultinom_c_reverse", (DL_FUNC) &_pemultinom_pemultinom_c_reverse, 7},
+    {"_pemultinom_pemultinom_c_reverse", (DL_FUNC) &_pemultinom_pemultinom_c_reverse, 8},
     {NULL, NULL, 0}
 };
 

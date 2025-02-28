@@ -13,25 +13,33 @@ using namespace Rcpp;
 
 
 // [[Rcpp::export]]
-double vec_prod(NumericVector x, NumericVector y) {
-  int n = x.size();
-  double total = 0;
-  for (int i = 0; i < n; ++i) {
-    total += x[i]*y[i];
-  }
-  return total;
+double vec_prod(const NumericVector& x, const NumericVector& y) {
+  return std::inner_product(x.begin(), x.end(), y.begin(), 0.0);
 }
+// double vec_prod(NumericVector x, NumericVector y) {
+//   int n = x.size();
+//   double total = 0;
+//   for (int i = 0; i < n; ++i) {
+//     total += x[i]*y[i];
+//   }
+//   return total;
+// }
 
 
 // [[Rcpp::export]]
-NumericVector vec_diff(NumericVector x, NumericVector y) {
-  int n = x.size();
-  NumericVector vec(n);
-  for (int i = 0; i < n; ++i) {
-    vec[i] = x[i]-y[i];
-  }
-  return vec;
+NumericVector vec_diff(const NumericVector& x, const NumericVector& y) {
+  NumericVector result(x.size());
+  std::transform(x.begin(), x.end(), y.begin(), result.begin(), std::minus<double>());
+  return result;
 }
+// NumericVector vec_diff(NumericVector x, NumericVector y) {
+//   int n = x.size();
+//   NumericVector vec(n);
+//   for (int i = 0; i < n; ++i) {
+//     vec[i] = x[i]-y[i];
+//   }
+//   return vec;
+// }
 
 
 // [[Rcpp::export]] // the product of the i-th row of x and y
@@ -74,23 +82,29 @@ NumericMatrix xb_mx_plus(NumericMatrix xb, NumericVector beta0) {
 
 
 // [[Rcpp::export]]
-double vec_sum(NumericVector x) {
-  double total = 0;
-  for (int i = 0; i < x.size(); i++) {
-    total += x[i];
-  }
-  return total;
+double vec_sum(const NumericVector& x) {
+  return std::accumulate(x.begin(), x.end(), 0.0);
 }
+// double vec_sum(NumericVector x) {
+//   double total = 0;
+//   for (int i = 0; i < x.size(); i++) {
+//     total += x[i];
+//   }
+//   return total;
+// }
 
 
 // [[Rcpp::export]]
-double max2(double x, double y) {
-  if (x > y) {
-    return x;
-  } else {
-    return y;
-  }
+double max2(double a, double b) {
+  return std::max(a, b);
 }
+// double max2(double x, double y) {
+//   if (x > y) {
+//     return x;
+//   } else {
+//     return y;
+//   }
+// }
 
 
 // [[Rcpp::export]]
@@ -147,31 +161,47 @@ NumericVector vec_pointwise_prod(NumericVector x, NumericVector y) {
 }
 
 // [[Rcpp::export]]
-NumericMatrix pr(NumericMatrix xb) {
-  int nrow = xb.nrow(), ncol = xb.ncol();
-  double pb_sum = 0;
-  NumericMatrix prob(nrow, ncol+1);
-  NumericMatrix exp_xb(nrow, ncol+1);
-  for (int i = 0; i < nrow; ++i) {
-    for (int l = 0; l < ncol+1; ++l) {
-      if (l != ncol) {
-        exp_xb(i,l) = exp(xb(i,l));
-      } else {
-        exp_xb(i,l) = 1;
-      }
+NumericMatrix pr(const NumericMatrix& xb) {
+  int n = xb.nrow(), k = xb.ncol();
+  NumericMatrix prob(n, k + 1);
+  for (int i = 0; i < n; ++i) {
+    double sum_exp = 1.0;
+    for (int l = 0; l < k; ++l) {
+      sum_exp += std::exp(xb(i, l));
     }
-  }
-
-  for (int i = 0; i < nrow; ++i) {
-    pb_sum = vec_sum(exp_xb(i,_));
-    for (int l = 0; l < ncol+1; ++l) {
-      prob(i,l) = exp_xb(i,l)/pb_sum;
+    for (int l = 0; l < k; ++l) {
+      prob(i, l) = std::exp(xb(i, l)) / sum_exp;
     }
+    prob(i, k) = 1.0 / sum_exp;
   }
-
-  // return exp_xb;
   return prob;
 }
+
+// NumericMatrix pr(NumericMatrix xb) {
+//   int nrow = xb.nrow(), ncol = xb.ncol();
+//   double pb_sum = 0;
+//   NumericMatrix prob(nrow, ncol+1);
+//   NumericMatrix exp_xb(nrow, ncol+1);
+//   for (int i = 0; i < nrow; ++i) {
+//     for (int l = 0; l < ncol+1; ++l) {
+//       if (l != ncol) {
+//         exp_xb(i,l) = exp(xb(i,l));
+//       } else {
+//         exp_xb(i,l) = 1;
+//       }
+//     }
+//   }
+//
+//   for (int i = 0; i < nrow; ++i) {
+//     pb_sum = vec_sum(exp_xb(i,_));
+//     for (int l = 0; l < ncol+1; ++l) {
+//       prob(i,l) = exp_xb(i,l)/pb_sum;
+//     }
+//   }
+//
+//   // return exp_xb;
+//   return prob;
+// }
 
 
 // [[Rcpp::export]]
@@ -184,24 +214,30 @@ NumericMatrix xb_calc(NumericMatrix x, NumericMatrix beta, NumericVector beta0) 
 
 // [[Rcpp::export]]
 double abs_value(double x) {
-  if(x >= 0) {
-    return x;
-  } else {
-    return -x;
-  }
+  return std::abs(x);
 }
+// double abs_value(double x) {
+//   if(x >= 0) {
+//     return x;
+//   } else {
+//     return -x;
+//   }
+// }
 
 
 // [[Rcpp::export]]
-double vec_max_norm(NumericVector x) {
-  double x_max = abs_value(x[0]);
-  for (int i = 0; i < x.size()-1; i++) {
-    if (abs_value(x[i+1]) > abs_value(x[i])) {
-      x_max = abs_value(x[i+1]);
-    }
-  }
-  return x_max;
+double vec_max_norm(const NumericVector& x) {
+  return *std::max_element(x.begin(), x.end(), [](double a, double b) { return std::abs(a) < std::abs(b); });
 }
+// double vec_max_norm(NumericVector x) {
+//   double x_max = abs_value(x[0]);
+//   for (int i = 0; i < x.size()-1; i++) {
+//     if (abs_value(x[i+1]) > abs_value(x[i])) {
+//       x_max = abs_value(x[i+1]);
+//     }
+//   }
+//   return x_max;
+// }
 
 
 // [[Rcpp::export]]
@@ -210,15 +246,20 @@ NumericMatrix test(NumericMatrix x) {
 }
 
 // [[Rcpp::export]]
-double soft_thresholding(double z, double gamma) {
-  if (z > 0 && gamma < abs_value(z)) {
-    return z-gamma;
-  } else if (z < 0 && gamma < abs_value(z)) {
-    return z + gamma;
-  } else {
-    return 0;
-  }
+double soft_thresholding(double z, double lambda) {
+  if (z > lambda) return z - lambda;
+  if (z < -lambda) return z + lambda;
+  return 0;
 }
+// double soft_thresholding(double z, double gamma) {
+//   if (z > 0 && gamma < abs_value(z)) {
+//     return z-gamma;
+//   } else if (z < 0 && gamma < abs_value(z)) {
+//     return z + gamma;
+//   } else {
+//     return 0;
+//   }
+// }
 
 
 // [[Rcpp::export]]
@@ -360,7 +401,7 @@ NumericMatrix penalized_quad(NumericMatrix A, NumericVector b, NumericVector lam
 
 
 // [[Rcpp::export]]
-List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda_list, int max_iter, double tol, NumericVector zero_ind, NumericVector weights) {
+List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda_list, int max_iter, double tol, NumericVector zero_ind, NumericVector weights, bool intercept) {
   int n = x.nrow(), p = x.ncol(), count = 0, count_l = 0, K = y.ncol(), nlambda = lambda_list.size();
   double change = 100, change_l = 10, v_j = 0, z_j = 0, beta0_l = 0, beta_l = 0, shift_beta0_l = 0, beta0_l_old = 0, max_change = 0, lambda = 0;
   NumericVector w_l(n), w_l1(n), z_l(n), x_j(n), r_l(n), wr_l(n), beta0(K-1), s_l(n), shift_beta_l(p), beta_l_old(p);
@@ -402,7 +443,9 @@ List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda
             // Rcout << beta0[l] << "\n";
 
             beta0_l = beta0[l];
-            beta0[l] = beta0[l] + vec_sum(wr_l)/vec_sum(w_l);
+            if (intercept) {
+              beta0[l] = beta0[l] + vec_sum(wr_l)/vec_sum(w_l);
+            }
             shift_beta0_l = beta0[l]-beta0_l;
             if (change_l < abs_value(shift_beta0_l)) {
               change_l = abs_value(shift_beta0_l);
@@ -488,7 +531,9 @@ List pemultinom_c_reverse(NumericMatrix x, NumericMatrix y, NumericVector lambda
             // Rcout << beta0[l] << "\n";
 
             beta0_l = beta0[l];
-            beta0[l] = beta0[l] + vec_sum(wr_l)/vec_sum(w_l);
+            if (intercept) {
+              beta0[l] = beta0[l] + vec_sum(wr_l)/vec_sum(w_l);
+            }
             shift_beta0_l = beta0[l]-beta0_l;
             if (change_l < abs_value(shift_beta0_l)) {
               change_l = abs_value(shift_beta0_l);

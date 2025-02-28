@@ -1,6 +1,6 @@
 #' Fit a multinomial regression model with Lasso penalty.
 #'
-#' Fit a multinomial regression model with Lasso penalty. This function implements the l1-penalized multinomial regression model (parameterized with a reference level). A cross-validation procedure is applied to choose the tuning parameter. See Tian et al. (2023) for details.
+#' Fit a multinomial regression model with Lasso penalty. This function implements the l1-penalized multinomial regression model (parameterized with a reference level). A cross-validation procedure is applied to choose the tuning parameter. See Tian et al. (2024) for details.
 #' @export
 #' @importFrom stats predict
 #' @importFrom stats model.matrix
@@ -9,7 +9,9 @@
 #' @importFrom stats pnorm
 #' @importFrom stats qnorm
 #' @importFrom stats sd
+#' @importFrom stats cov
 #' @importFrom utils tail
+#' @importFrom utils globalVariables
 #' @importFrom nnet multinom
 #' @importFrom foreach foreach
 #' @importFrom foreach %do%
@@ -17,6 +19,7 @@
 #' @importFrom magrittr %>%
 #' @importFrom doParallel registerDoParallel
 #' @importFrom doParallel stopImplicitCluster
+#' @importFrom lpSolve lp
 #' @param x the design/predictor matrix, each row of which is an observation vector.
 #' @param y the response variable. Can be of one type from factor/integer/character.
 #' @param ref the reference level. Default = NULL, which sets the reference level to the last category (sorted by alphabetical order)
@@ -27,6 +30,8 @@
 #' @param ncores the number of cores to use for parallel computing. Default = 1.
 #' @param standardized logical flag for x variable standardization, prior to fitting the model sequence. Default = TRUE. Note that the fitting results will be translated to the original scale before output.
 #' @param weights observation weights. Should be a vector of non-negative numbers of length n (the number of observations). Default = NULL, which sets equal weights for all observations.
+#' @param info whether to print the information or not. Default = TRUE.
+#' @param lambda_min_ratio the ratio between lambda.min and lambda.max, where lambda.max is automatically determined by the code and the lambda sequence will be determined by `exp(seq(log(lambda.max), log(lambda.min), len = nlambda))`.
 #' @return A list with the following components.
 #' \item{beta.list}{the estimates of coefficients. It is a list of which the k-th component is the contrast coefficient between class k and the reference class corresponding to different lambda values. The j-th column of each list component corresponds to the j-th lambda value.}
 #' \item{beta.1se}{the coefficient estimate corresponding to lambda.1se. It is a matrix, and the k-th column is the contrast coefficient between class k and the reference class.}
@@ -40,15 +45,15 @@
 #' @references
 #' Hastie, T., Tibshirani, R., & Wainwright, M. (2015). Statistical learning with sparsity. Monographs on statistics and applied probability, 143.
 #'
-#' Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2023). L1-penalized Multinomial Regression: Estimation, inference, and prediction, with an application to risk factor identification for different dementia subtypes. arXiv preprint arXiv:2302.02310.
+#' Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2024). L1‐Penalized Multinomial Regression: Estimation, Inference, and Prediction, With an Application to Risk Factor Identification for Different Dementia Subtypes. Statistics in Medicine, 43(30), 5711-5747.
 #'
 #' @useDynLib pemultinom
 #' @import Rcpp
 #'
 #' @examples
-#' # generate data from Model 1 in Tian et al. (2023) with n = 50 and p = 50
+#' # generate data from a logistic regression model with n = 100, p = 50, and K = 3
 #' set.seed(0, kind = "L'Ecuyer-CMRG")
-#' n <- 50
+#' n <- 100
 #' p <- 50
 #' K <- 3
 #'
@@ -58,8 +63,8 @@
 #' R <- chol(Sigma)
 #' s <- 3
 #' beta_coef <- matrix(0, nrow = p+1, ncol = K-1)
-#' beta_coef[1+1:s, 1] <- c(1.5, 1.5, 1.5)
-#' beta_coef[1+1:s+s, 2] <- c(1.5, 1.5, 1.5)
+#' beta_coef[1+1:s, 1] <- c(3, 3, 3)
+#' beta_coef[1+1:s+s, 2] <- c(3, 3, 3)
 #'
 #' x <- matrix(rnorm(n*p), ncol = p) %*% R
 #' y <- sapply(1:n, function(j){
@@ -95,8 +100,8 @@
 #' # predict posterior probabilities of test data
 #' ypred.prob <- predict_pemultinom(fit$beta.min, ref = 3, xnew = x.test, type = "prob")
 
-cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter = 200, tol = 1e-3, ncores = 1, standardized = TRUE,
-                          weights = NULL) {
+cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter = 200, tol = 1e-3, ncores = 1,
+                          standardized = TRUE, weights = NULL, info = TRUE, lambda_min_ratio = 0.01) {
   p <- ncol(x)
   n <- nrow(x)
   K <- length(unique(y))
@@ -105,7 +110,9 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
   y <- numeric(length(y.ori))
   if (is.null(ref)) {
     ref <- tail(sort(unique(y.ori)), 1)
-    message(paste("No reference level is specified! Class '", ref, "' is set as the reference class.", sep = ""))
+    if (info) {
+      message(paste("No reference level is specified! Class '", ref, "' is set as the reference class.", sep = ""))
+    }
   }
 
   y.value <- sort(unique(y.ori[y.ori != ref]))
@@ -119,7 +126,6 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
     weights <- rep(1, n)
   }
   # just added----
-
 
   n_list <- as.numeric(table(y))
   fold_by_class <- sapply(1:K, function(k){
@@ -148,11 +154,13 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
     x.scaled <- x
     x.center <- rep(0, p)
     x.std <- rep(1, p)
+    zero_ind <- rep(FALSE, p)
   }
 
   y.dummy <- as.matrix(model.matrix(~ factor(y)-1))
-  lambda_list <- set_lambda(x = x.scaled, y = y, nlambda = nlambda, weights = weights)
-  L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol, zero_ind = zero_ind, weights = weights)
+  lambda_list <- set_lambda(x = x.scaled, y = y, nlambda = nlambda, weights = weights, lambda_min_ratio = lambda_min_ratio)
+  L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol,
+                            zero_ind = zero_ind, weights = weights, intercept = TRUE)
 
   beta <- sapply(1:(K-1), function(l){
     beta_cur <- matrix(L[[1]][, l, drop = FALSE]/x.std, nrow = p)
@@ -193,7 +201,8 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
 
       y.dummy <- as.matrix(model.matrix(~ factor(y_train)-1))
 
-      L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol, zero_ind = zero_ind, weights = weights[fold != k])
+      L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol,
+                                zero_ind = zero_ind, weights = weights[fold != k], intercept = TRUE)
 
       beta_cv <- sapply(1:(K-1), function(l){
         beta_cur <- matrix(L[[1]][, l, drop = FALSE]/x.std, nrow = p)
@@ -241,7 +250,8 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
       }
       y.dummy <- as.matrix(model.matrix(~ factor(y_train)-1))
 
-      L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol, zero_ind = zero_ind, weights = weights[fold != k])
+      L <- pemultinom_c_reverse(x = x.scaled, y = y.dummy, lambda_list = lambda_list, max_iter = max_iter, tol = tol,
+                                zero_ind = zero_ind, weights = weights[fold != k], intercept = TRUE)
 
       beta_cv <- sapply(1:(K-1), function(l){
         beta_cur <- matrix(L[[1]][, l, drop = FALSE]/x.std, nrow = p)
@@ -276,6 +286,8 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
   cvm.min <- cvm[ind.min]
   ind.1se <- min(which(cvm <= cvm.min + cvsd.min))
   lambda.1se <- lambda_list[ind.1se]
+  ind.3se <- max(which(cvm <= cvm.min + cvsd.min))
+  lambda.3se <- lambda_list[ind.3se]
 
   beta.1se <- sapply(1:(K-1), function(k){
     beta[[k]][, ind.1se]
@@ -289,17 +301,35 @@ cv.pemultinom <- function(x, y, ref = NULL, nfolds = 5, nlambda = 100, max_iter 
 
   colnames(beta.min) <- y.value
 
-  beta.scaled.min <- sapply(1:(K-1), function(k){
-    beta[[k]][-1, ind.min]*x.std
+  beta.3se <- sapply(1:(K-1), function(k){
+    beta[[k]][, ind.3se]
   })
+
+  colnames(beta.3se) <- y.value
+
+
+  if (standardized) {
+    beta.1se[-1, ] <- beta.1se[-1, ]/x.std
+    beta.min[-1, ] <- beta.min[-1, ]/x.std
+    beta.3se[-1, ] <- beta.3se[-1, ]/x.std
+
+    beta.1se[1, ] <- beta.1se[1, ] - t(beta.1se[-1, ]) %*% x.center
+    beta.min[1, ] <- beta.min[1, ] - t(beta.min[-1, ]) %*% x.center
+    beta.3se[1, ] <- beta.3se[1, ] - t(beta.3se[-1, ]) %*% x.center
+
+    lambda_list <- lambda_list*x.std
+    lambda.1se <- lambda.1se*x.std
+    lambda.min <- lambda.min*x.std
+  }
+
 
   stopImplicitCluster()
 
   # return(list(beta.list = beta, beta.1se = beta.1se, beta.min = beta.min, lambda.1se = lambda.1se, lambda.min = lambda.min,
   #             cvm = cvm, cvsd = cvsd, lambda = lambda_list, weights = weights, x.scaled = x.scaled, x.center = x.center,
   #             x.std = x.std, beta.scaled.min = beta.scaled.min))
-  return(list(beta.list = beta, beta.1se = beta.1se, beta.min = beta.min, lambda.1se = lambda.1se, lambda.min = lambda.min,
-              cvm = cvm, cvsd = cvsd, lambda = lambda_list))
+  return(list(beta.list = beta, beta.1se = beta.1se, beta.min = beta.min, beta.3se = beta.3se, lambda.1se = lambda.1se,
+              lambda.min = lambda.min, lambda.3se = lambda.3se, cvm = cvm, cvsd = cvsd, lambda = lambda_list))
 }
 
 

@@ -14,7 +14,9 @@ cv.pemultinom(
   tol = 0.001,
   ncores = 1,
   standardized = TRUE,
-  weights = NULL
+  weights = NULL,
+  info = TRUE,
+  lambda_min_ratio = 0.01
 )
 }
 \arguments{
@@ -37,6 +39,10 @@ cv.pemultinom(
 \item{standardized}{logical flag for x variable standardization, prior to fitting the model sequence. Default = TRUE. Note that the fitting results will be translated to the original scale before output.}
 
 \item{weights}{observation weights. Should be a vector of non-negative numbers of length n (the number of observations). Default = NULL, which sets equal weights for all observations.}
+
+\item{info}{whether to print the information or not. Default = TRUE.}
+
+\item{lambda_min_ratio}{the ratio between lambda.min and lambda.max, where lambda.max is automatically determined by the code and the lambda sequence will be determined by `exp(seq(log(lambda.max), log(lambda.min), len = nlambda))`.}
 }
 \value{
 A list with the following components.
@@ -50,12 +56,12 @@ A list with the following components.
 \item{lambda}{lambda values considered in the cross-validation process.}
 }
 \description{
-Fit a multinomial regression model with Lasso penalty. This function implements the l1-penalized multinomial regression model (parameterized with a reference level). A cross-validation procedure is applied to choose the tuning parameter. See Tian et al. (2023) for details.
+Fit a multinomial regression model with Lasso penalty. This function implements the l1-penalized multinomial regression model (parameterized with a reference level). A cross-validation procedure is applied to choose the tuning parameter. See Tian et al. (2024) for details.
 }
 \examples{
-# generate data from Model 1 in Tian et al. (2023) with n = 50 and p = 50
+# generate data from a logistic regression model with n = 100, p = 50, and K = 3
 set.seed(0, kind = "L'Ecuyer-CMRG")
-n <- 50
+n <- 100
 p <- 50
 K <- 3
 
@@ -65,8 +71,8 @@ Sigma <- outer(1:p, 1:p, function(x,y) {
 R <- chol(Sigma)
 s <- 3
 beta_coef <- matrix(0, nrow = p+1, ncol = K-1)
-beta_coef[1+1:s, 1] <- c(1.5, 1.5, 1.5)
-beta_coef[1+1:s+s, 2] <- c(1.5, 1.5, 1.5)
+beta_coef[1+1:s, 1] <- c(3, 3, 3)
+beta_coef[1+1:s+s, 2] <- c(3, 3, 3)
 
 x <- matrix(rnorm(n*p), ncol = p) \%*\% R
 y <- sapply(1:n, function(j){
@@ -105,7 +111,7 @@ ypred.prob <- predict_pemultinom(fit$beta.min, ref = 3, xnew = x.test, type = "p
 \references{
 Hastie, T., Tibshirani, R., & Wainwright, M. (2015). Statistical learning with sparsity. Monographs on statistics and applied probability, 143.
 
-Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2023). L1-penalized Multinomial Regression: Estimation, inference, and prediction, with an application to risk factor identification for different dementia subtypes. arXiv preprint arXiv:2302.02310.
+Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2024). L1‐Penalized Multinomial Regression: Estimation, Inference, and Prediction, With an Application to Risk Factor Identification for Different Dementia Subtypes. Statistics in Medicine, 43(30), 5711-5747.
 }
 \seealso{
 \code{\link{debiased_lasso}}, \code{\link{predict_pemultinom}}.

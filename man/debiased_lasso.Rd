@@ -8,14 +8,18 @@ debiased_lasso(
   x,
   y,
   ref = NULL,
-  beta,
+  beta = NULL,
   nfolds = 5,
   ncores = 1,
   nlambda = 50,
   max_iter = 200,
   tol = 0.001,
   lambda.choice = "lambda.min",
-  alpha = 0.05
+  alpha = 0.05,
+  method = c("nodewise_reg", "LP"),
+  info = TRUE,
+  LP.parameter = list(eta = NULL, split.ratio = 0.5),
+  lambda_min_ratio = 0.01
 )
 }
 \arguments{
@@ -27,19 +31,35 @@ debiased_lasso(
 
 \item{beta}{the beta estimate from l1-penalized multinomial regression. Should be in the same format as \code{beta.min} or \code{beta.1se} in output of function \code{\link{cv.pemultinom}}. The user is recommended to directly pass \code{beta.min} or \code{beta.1se} from the output of function \code{\link{cv.pemultinom}} to parameter \code{beta}.}
 
-\item{nfolds}{the number of cross-validation folds to use. Cross-validation is used to determine the best tuning parameter lambda in the nodewise regression, i.e., Algorithm 2 in Tian et al. (2023). Default = 5.}
+\item{nfolds}{the number of cross-validation folds to use. Cross-validation is used to determine the best tuning parameter lambda in the nodewise regression, i.e., Algorithm 2 in Tian et al. (2024). Default = 5.}
 
 \item{ncores}{the number of cores to use for parallel computing. Default = 1.}
 
-\item{nlambda}{the number of penalty parameter candidates in the cross-validation procedure. Cross-validation is used to determine the best tuning parameter lambda in the nodewise regression, i.e., Algorithm 2 in Tian et al. (2023). Default = 100.}
+\item{nlambda}{the number of penalty parameter candidates in the cross-validation procedure. Cross-validation is used to determine the best tuning parameter lambda in the nodewise regression, i.e., Algorithm 2 in Tian et al. (2024). Default = 100.}
 
 \item{max_iter}{the maximum iteration rounds in each iteration of the coordinate descent algorithm. Default = 200.}
 
 \item{tol}{convergence threshold (tolerance level) for coordinate descent. Default = 1e-3.}
 
-\item{lambda.choice}{observation weights. Should be a vector of non-negative numbers of length n (the number of observations). Default = NULL, which sets equal weights for all observations.}
+\item{lambda.choice}{the choice of the tuning parameter lambda used in the nodewise regression. It can only be either "lambda.min" or "lambda.1se". The interpretation is the same as in the `cv.pemultinom` function. Default = "lambda.min".}
 
 \item{alpha}{significance level used in the output confidence interval. Has to be a number between 0 and 1. Default = 0.05.}
+
+\item{method}{which method to estimate the Hessian inverse matrix. Can be either "nodewise_reg" or "LP".
+\itemize{
+\item nodewise_reg: the method presented in the main text of Tian et al. (2024).
+\item LP: the method presented in Section A of the supplements of Tian et al. (2024). Warning: This method is not well implemented as `eta` parameter has to be set as fixed and currently cannot be automatically tuned.
+}}
+
+\item{info}{whether to print the information or not. Default = TRUE.}
+
+\item{LP.parameter}{If \code{method} = `LP`, then this parameter will be used. It has to be a list of two components like `list(eta = NULL, split.ratio = 0.5)`. Here is the interpretation:
+\itemize{
+\item eta: This is the parameter used in the LP method which is the righthand side of the contraints. Default `eta` = `NULL`, which will be set as \eqn{2\sqrt{\log(p)/n}} where p is the number of features and n is the total sample size.
+\item split.ratio: The split ratio used in the LP method. The data will be splitted into two parts by class based on `split.ratio`. The first part will be used to fit the Lasso estimator, and the second part will be used to fit the Hessian inverse through the LP method. Default `split.ratio` = 0.5.
+}}
+
+\item{lambda_min_ratio}{the ratio between lambda.min and lambda.max used for the Lasso problem in the nodewise regression (for estimating the Hessian inverse), where lambda.max is automatically determined by the code and the lambda sequence will be determined by `exp(seq(log(lambda.max), log(lambda.min), len = nlambda))`.}
 }
 \value{
 A list of data frames, each of which contains the inference results for each class (v.s. the reference class). In the data frame, each row represents a variable. The columns include:
@@ -50,13 +70,13 @@ A list of data frames, each of which contains the inference results for each cla
 \item{std_dev}{the estimated standard deviation of each component of beta estimate}
 }
 \description{
-Doing statistical inference on l1-penalized multinomial regression via debiased Lasso (or desparisified Lasso). This function implements the algorithm described in Tian et al. (2023), which is an extension of the original debiased Lasso (Van de Geer et al. (2014); Zhang and Zhang (2014)) to the multinomial case.
+Doing statistical inference on l1-penalized multinomial regression via debiased Lasso (or desparisified Lasso). This function implements the algorithm described in Tian et al. (2024), which is an extension of the original debiased Lasso (Van de Geer et al. 2014; Zhang and Zhang. 2014; Javanmard, A. and Montanari, A. (2014)) to the multinomial case.
 }
 \examples{
 \donttest{
-# generate data from Model 1 in Tian et al. (2023) with n = 100 and p = 50
+# generate data from a logistic regression model with n = 100, p = 50, and K = 3
 set.seed(0, kind = "L'Ecuyer-CMRG")
-n <- 50
+n <- 100
 p <- 50
 K <- 3
 
@@ -66,8 +86,8 @@ Sigma <- outer(1:p, 1:p, function(x,y) {
 R <- chol(Sigma)
 s <- 3
 beta_coef <- matrix(0, nrow = p+1, ncol = K-1)
-beta_coef[1+1:s, 1] <- c(1.5, 1.5, 1.5)
-beta_coef[1+1:s+s, 2] <- c(1.5, 1.5, 1.5)
+beta_coef[1+1:s, 1] <- c(3, 3, 3)
+beta_coef[1+1:s+s, 2] <- c(3, 3, 3)
 
 x <- matrix(rnorm(n*p), ncol = p) \%*\% R
 y <- sapply(1:n, function(j){
@@ -87,11 +107,13 @@ fit_debiased <- debiased_lasso(x, y, beta = beta, ncores = 2)
 }
 }
 \references{
-Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2023). L1-penalized Multinomial Regression: Estimation, inference, and prediction, with an application to risk factor identification for different dementia subtypes. arXiv preprint arXiv:2302.02310.
+Tian, Y., Rusinek, H., Masurkar, A. V., & Feng, Y. (2024). L1‐Penalized Multinomial Regression: Estimation, Inference, and Prediction, With an Application to Risk Factor Identification for Different Dementia Subtypes. Statistics in Medicine, 43(30), 5711-5747.
 
 Van de Geer, S., Bühlmann, P., Ritov, Y. A., & Dezeure, R. (2014). On asymptotically optimal confidence regions and tests for high-dimensional models. The Annals of Statistics, 42(3), 1166-1202.
 
 Zhang, C. H., & Zhang, S. S. (2014). Confidence intervals for low dimensional parameters in high dimensional linear models. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 76(1), 217-242.
+
+Javanmard, A., & Montanari, A. (2014). Confidence intervals and hypothesis testing for high-dimensional regression. The Journal of Machine Learning Research, 15(1), 2869-2909.
 }
 \seealso{
 \code{\link{cv.pemultinom}}, \code{\link{predict_pemultinom}}.

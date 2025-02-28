@@ -5,7 +5,7 @@ loss <- function(prob, y_valid, weights) {
 }
 
 
-set_lambda <- function(x, y, ref = NULL, nlambda = 100, weights) {
+set_lambda <- function(x, y, ref = NULL, nlambda = 100, weights, lambda_min_ratio = 0.01) {
   K <- length(unique(y))
   y.leveled <- relevel(as.factor(y), ref = as.character(K))
   fit_nnet <- multinom(y.leveled~1, trace = FALSE, weights = weights)
@@ -23,14 +23,14 @@ set_lambda <- function(x, y, ref = NULL, nlambda = 100, weights) {
 
 
   lambda.max <- zmax
-  lambda.min <- 0.01*lambda.max
+  lambda.min <- lambda_min_ratio*lambda.max
   lambda <- exp(seq(log(lambda.max), log(lambda.min), len = nlambda))
   return(lambda)
 }
 
-
+# #' @export
 inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, tol = 1e-3, ncores = 1,
-                         lambda.choice = c("lambda.1se", "lambda.min")) {
+                         lambda.choice = c("lambda.1se", "lambda.min", "lambda.3se"), lambda_min_ratio = 0.01, r = 0.1) {
   registerDoParallel(ncores)
 
   pb_calc <- function(X, beta) {
@@ -72,7 +72,7 @@ inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, 
 
 
   loss <- sapply(1:nfolds, function(r){
-    message(paste("Fold ", r, " of 5......", sep = ""))
+    message(paste("Fold ", r, " of ", nfolds, "......", sep = ""))
 
     pb <- pb_calc(X=x[fold != r, ], beta = beta)
     Sigma <- matrix(nrow = (K-1)*p, ncol=(K-1)*p)
@@ -102,7 +102,7 @@ inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, 
       if (lambda.max[j] == 0) {
         rep(NA, nlambda)
       } else {
-        lambda.min <- 0.01*lambda.max[j]
+        lambda.min <- lambda_min_ratio*lambda.max[j]
         lambda_list <- exp(seq(log(lambda.max[j]), log(lambda.min), len = nlambda))
         gamma_j_matrix <- penalized_quad_r(A = Sigma[-j, -j], b = Sigma[j, -j], lambda_list = lambda_list, max_iter = max_iter, tol = tol)
         sapply(1:nlambda, function(l){
@@ -118,7 +118,7 @@ inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, 
     if (lambda.max[j] == 0) {
       rep(0, p.big - 1)
     } else {
-      lambda.min <- 0.01*lambda.max[j]
+      lambda.min <- lambda_min_ratio*lambda.max[j]
       lambda_list <- exp(seq(log(lambda.max[j]), log(lambda.min), len = nlambda))
       gamma_j_matrix <- penalized_quad_r(A = Sigma.full[-j, -j], b = Sigma.full[j, -j], lambda_list = lambda_list, max_iter = max_iter, tol = tol)
       loss_j <- sapply(1:nfolds, function(r){
@@ -132,10 +132,15 @@ inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, 
       cvm.min <- cvm[ind.min]
       ind.1se <- min(which(cvm <= cvm.min + cvsd.min))
       lambda.1se <- lambda_list[ind.1se]
+      # ind.3se <- ifelse(floor(ind.min*(1+r)) > nlambda, nlambda, floor(ind.min*(1+r)))
+      ind.3se <- max(which(cvm <= cvm.min + r*cvsd.min))
+      lambda.3se <- lambda_list[ind.3se]
       if(lambda.choice == "lambda.1se") {
         gamma_j <- gamma_j_matrix[ind.1se, ]
-      } else if(lambda.choice == "lambda.min") {
+      } else if (lambda.choice == "lambda.min") {
         gamma_j <- gamma_j_matrix[ind.min, ]
+      } else if (lambda.choice == "lambda.3se") {
+        gamma_j <- gamma_j_matrix[ind.3se, ]
       }
       gamma_j
     }
@@ -161,13 +166,92 @@ inv_cov_calc <- function(x, y, beta, nfolds = 5, nlambda = 100, max_iter = 200, 
   return(list(Theta = Theta, const.index = which(lambda.max == 0)))
 }
 
+#
+# M_QP <- function(x, y, beta, eta, ncores = 1) {
+#   K <- length(unique(y))
+#   p <- NCOL(x)
+#   n <- NROW(x)
+#
+#   pb_calc <- function(X, beta) {
+#     expxb <- cbind(exp(cbind(1, X) %*% beta), 1)
+#     pb <- expxb/rowSums(expxb)
+#     pb
+#   }
+#
+#   pb <- pb_calc(X=x, beta = beta)
+#   Sigma.full <- matrix(nrow = (K-1)*p, ncol=(K-1)*p)
+#   for (k1 in 1:(K-1)) {
+#     for (k2 in 1:(K-1)) {
+#       if (k1 == k2) {
+#         Sigma.full[(1+(k1-1)*p):(k1*p), (1+(k2-1)*p):(k2*p)] <- (t(x) %*% diag(pb[,k1]*(1-pb[,k1])) %*% x)/n
+#       } else {
+#         Sigma.full[(1+(k1-1)*p):(k1*p), (1+(k2-1)*p):(k2*p)] <- (t(x) %*% diag(-pb[,k1]*pb[,k2]) %*% x)/n
+#       }
+#     }
+#   }
+#   Dmat <- Sigma.full
+#   Amat <- t(rbind(Sigma.full, -Sigma.full))
+#   bvec <- rep(eta, (K-1)*p*2)
+#   Theta <- sapply(1:((K-1)*p), function(j){
+#     ej_db <- numeric((K-1)*p*2)
+#     ej_db[j] <- -1
+#     ej_db[(K-1)*p+j] <- 1
+#     sol_QP <- solve.QP(Dmat = Dmat, dvec = numeric((K-1)*p), Amat = Amat, bvec = -(bvec + ej_db))
+#     sol_QP$solution
+#   })
+#   return(Theta)
+# }
+
+
+M_LP <- function(x, y, beta, eta, ncores = 1) {
+  j <- 1 # to avoid a warning about no visible binding for global variable 'j' -- this is a hack and an imperfect solution
+
+  K <- length(unique(y))
+  p <- NCOL(x)
+  n <- NROW(x)
+  registerDoParallel(ncores)
+
+  pb_calc <- function(X, beta) {
+    expxb <- cbind(exp(cbind(1, X) %*% beta), 1)
+    pb <- expxb/rowSums(expxb)
+    pb
+  }
+
+  pb <- pb_calc(X=x, beta = beta)
+  Sigma.full <- matrix(nrow = (K-1)*p, ncol=(K-1)*p)
+  for (k1 in 1:(K-1)) {
+    for (k2 in 1:(K-1)) {
+      if (k1 == k2) {
+        Sigma.full[(1+(k1-1)*p):(k1*p), (1+(k2-1)*p):(k2*p)] <- (t(x) %*% diag(pb[,k1]*(1-pb[,k1])) %*% x)/n
+      } else {
+        Sigma.full[(1+(k1-1)*p):(k1*p), (1+(k2-1)*p):(k2*p)] <- (t(x) %*% diag(-pb[,k1]*pb[,k2]) %*% x)/n
+      }
+    }
+  }
+
+  A.mat <- rbind(cbind(Sigma.full, -Sigma.full),
+                 cbind(-Sigma.full, Sigma.full),
+                 cbind(diag(-1, (K-1)*p), diag(0, (K-1)*p)),
+                 cbind(diag(0, (K-1)*p), diag(-1, (K-1)*p)))
+  bvec <- c(rep(eta, (K-1)*p*2), numeric((K-1)*p*2))
+  Theta <- foreach(j = 1:((K-1)*p), .combine = "rbind") %dopar% {
+    ej_db <- numeric((K-1)*p*2)
+    ej_db[j] <- 1
+    ej_db[(K-1)*p+j] <- -1
+    sol_LP <- lp(objective.in = rep(1, (K-1)*p*2), const.mat = A.mat, const.dir = rep("<=", (K-1)*p*4), const.rhs = bvec + ej_db)
+    sol_LP$solution[1:((K-1)*p)] - sol_LP$solution[-(1:((K-1)*p))]
+  }
+  stopImplicitCluster()
+
+  return(Theta)
+}
 
 penalized_quad_r <- function(A, b, lambda_list, max_iter=200, tol=1e-3) {
   penalized_quad(A, b, lambda_list, max_iter, tol)
 }
 
 
-
+# #' @export
 multisplits <- function(x, y, lambda = c("lambda.1se", "lambda.min"), ncores = 1, B = 50) {
   lambda <- match.arg(lambda)
   K <- length(unique(y))
@@ -182,7 +266,7 @@ multisplits <- function(x, y, lambda = c("lambda.1se", "lambda.min"), ncores = 1
     while (1) {
       ind <- sample(n, size = floor(n/2))
 
-      fit_lasso <- try(cv.pemultinom(x = x[ind, ], y = y[ind], ncores = ncores))
+      fit_lasso <- try(cv.pemultinom(x = x[ind, ], y = y[ind], ncores = ncores, info = FALSE))
       if (!inherits(fit_lasso, "try-error")) {
         if (lambda == "lambda.1se") {
           S_active <- which(rowSums(fit_lasso$beta.1se[-1, ] != 0) > 0)
@@ -227,7 +311,7 @@ multisplits <- function(x, y, lambda = c("lambda.1se", "lambda.min"), ncores = 1
   return(p_value)
 }
 
-
+# #' @export
 bootstrap_multinom <- function(x, y, lambda = c("lambda.1se", "lambda.min"), ncores = 1, B = 50, alpha = 0.05,
                                type = c("vector", "residual")) {
   lambda <- match.arg(lambda)
@@ -247,7 +331,7 @@ bootstrap_multinom <- function(x, y, lambda = c("lambda.1se", "lambda.min"), nco
           y_b <- y[ind_b]
           x_b <- x[ind_b, ]
         }
-        fit_b <- try(cv.pemultinom(x = x_b, y = y_b, ncores = ncores))
+        fit_b <- try(cv.pemultinom(x = x_b, y = y_b, ncores = ncores, info = FALSE))
         if (!inherits(fit_b, "try-error")) {
           if (lambda == "lambda.1se") {
             for (k in 1:(K-1)) {
@@ -263,7 +347,7 @@ bootstrap_multinom <- function(x, y, lambda = c("lambda.1se", "lambda.min"), nco
       }
     }
   } else if (type == "residual") {
-    fit_initial <- cv.pemultinom(x = x, y = y, ncores = ncores)
+    fit_initial <- cv.pemultinom(x = x, y = y, ncores = ncores, info = FALSE)
     if (lambda == "lambda.1se") {
       beta <- fit_initial$beta.1se
     } else if (lambda == "lambda.min") {
@@ -280,7 +364,7 @@ bootstrap_multinom <- function(x, y, lambda = c("lambda.1se", "lambda.min"), nco
             sample(1:K, size = 1, prob = prob[i, ])
           })
         }
-        fit_b <- try(cv.pemultinom(x = x, y = y_b, ncores = ncores))
+        fit_b <- try(cv.pemultinom(x = x, y = y_b, ncores = ncores, info = FALSE))
         if (!inherits(fit_b, "try-error")) {
           if (lambda == "lambda.1se") {
             for (k in 1:(K-1)) {
